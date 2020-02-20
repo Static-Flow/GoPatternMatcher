@@ -5,6 +5,8 @@ This tool allows for quickly searching for a specified pattern within HTTP Respo
 # Help Output
 ```
 Usage of gpm:
+  -context int
+        Number of characters on both sides of a match to include. (0 to include whole line, could be large for minified JS) (default 50)
   -findall
         Find all matches not just first one
   -pattern string
@@ -13,6 +15,7 @@ Usage of gpm:
         timeout in milliseconds (default 10000)
   -workers int
         Number of workers to process urls (default 20)
+
 ```
 
 
@@ -27,6 +30,8 @@ cat urls.txt | gpm --patttern .js --findall
 ## Specify number of workers to concurrently process the URLs
 cat urls.txt | gpm --pattern .js --findall --workers 30
 
-
 ## Specify timeout of web reuqests in milliseconds
 cat urls.txt | gpm --pattern .js --findall --workers 30 --timeout 20000
+
+## Specify number of characters on each side of match  to include
+cat urls.txt | gpm --pattern .js --findall --workers 30 --timeout 20000 --context 100
