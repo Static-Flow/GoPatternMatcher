@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -15,16 +14,18 @@ import (
 	"sync"
 	"time"
 )
+
 /**
 This project performs quick pattern matches against HTTP responses. Simply pipe in a list of URLs and the pattern you'd
 like to match and this tool will show you the results.
- */
+*/
 func main() {
 	start := time.Now()
 	pattern := flag.String("pattern", "", "Pattern definition to look for")
-	findAll := flag.Bool("findall",false, "Find all matches not just first one")
+	findAll := flag.Bool("findall", false, "Find all matches not just first one")
 	workers := flag.Int("workers", 20, "Number of workers to process urls")
 	timeout := flag.Int("timeout", 10000, "timeout in milliseconds")
+	context := flag.Int("context", 50, "Number of characters on both sides of a match to include. (0 to include whole line, could be large for minified JS)")
 	flag.Parse()
 	if len(*pattern) == 0 {
 		log.Fatalln("Please supply a pattern to search for")
@@ -57,33 +58,45 @@ func main() {
 	for i := 0; i < *workers; i++ {
 		wg.Add(1)
 		/*
-		This following goroutine is where the magic happens
-		It pulls URLs from the group, sends a GET request, then runs the supplied regular expression against the response
-		Results are printed to screen along with a final tally of the total found
-		 */
+			This following goroutine is where the magic happens
+			It pulls URLs from the group, sends a GET request, then runs the supplied regular expression against the response
+			Results are printed to screen along with a final tally of the total found
+		*/
 		go func() {
 			for urlToSearch := range urlsToSearch {
 				resp, err := client.Get(urlToSearch)
 				if err == nil {
-					body, _ := ioutil.ReadAll(resp.Body)
-					//All patterns are surrounded by .* so you don't have to
-					re := regexp.MustCompile(`.*` + *pattern + `.*`)
-					if *findAll {
-						matches := re.FindAllString(string(body), -1)
-						for _, match := range matches {
-							fmt.Printf(strings.Trim(match, " ") + "\n")
-						}
-						totalMatches += len(matches)
-					} else {
-						match := re.FindString(string(body))
+					s := bufio.NewScanner(resp.Body)
+					re := regexp.MustCompile(*pattern)
+					line := 1
+					for s.Scan() {
+						searchSpace := strings.TrimSpace(s.Text())
+						match := re.FindStringIndex(searchSpace)
 						if len(match) > 0 {
-							fmt.Printf(strings.Trim(match, " ") + "\n")
+							if *context == 0 {
+								fmt.Printf("Found match on line %d: %s\n", line, searchSpace)
+							} else {
+								leftSlice := match[0] - *context
+								if leftSlice < 0 {
+									leftSlice = 0
+								}
+								rightSlice := match[1] + *context
+								if rightSlice > len(searchSpace) {
+									rightSlice = len(searchSpace)
+								}
+								fmt.Printf("Found match on line %d at offset %d: %s\n", line, match[0], searchSpace[leftSlice:rightSlice])
+								//fmt.Println(searchSpace[leftSlice:rightSlice])
+							}
 							totalMatches += 1
+							if !*findAll {
+								break
+							}
 						}
+						line++
 					}
 				}
 				resp.Body.Close()
-				fmt.Printf("Search of %s complete\n\n",urlToSearch)
+				fmt.Printf("Search of %s complete\n\n", urlToSearch)
 			}
 			wg.Done()
 		}()
@@ -95,6 +108,6 @@ func main() {
 	close(urlsToSearch)
 	fmt.Println("All URLs scheduled")
 	wg.Wait()
-	fmt.Printf("Found %d matches for %s\n",totalMatches,*pattern)
+	fmt.Printf("Found %d matches for %s\n", totalMatches, *pattern)
 	fmt.Printf("Finished in: %s\n", time.Since(start))
 }
