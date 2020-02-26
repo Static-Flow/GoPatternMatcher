@@ -23,9 +23,10 @@ func main() {
 	start := time.Now()
 	pattern := flag.String("pattern", "", "Pattern definition to look for")
 	findAll := flag.Bool("findall", false, "Find all matches not just first one")
-	workers := flag.Int("workers", 20, "Number of workers to process urls")
+	workers := flag.Int("workers", 20, "Number of workers to process URLs")
 	timeout := flag.Int("timeout", 10000, "timeout in milliseconds")
 	context := flag.Int("context", 50, "Number of characters on both sides of a match to include. (0 to include whole line, could be large for minified JS)")
+	path := flag.String("path", "", "Path to append to input URLs")
 	flag.Parse()
 	if len(*pattern) == 0 {
 		log.Fatalln("Please supply a pattern to search for")
@@ -64,7 +65,7 @@ func main() {
 		*/
 		go func() {
 			for urlToSearch := range urlsToSearch {
-				resp, err := client.Get(urlToSearch)
+				resp, err := client.Get(urlToSearch + *path)
 				if err == nil {
 					s := bufio.NewScanner(resp.Body)
 					re := regexp.MustCompile(*pattern)
@@ -96,7 +97,7 @@ func main() {
 					}
 				}
 				resp.Body.Close()
-				fmt.Printf("Search of %s complete\n\n", urlToSearch)
+				fmt.Printf("Search of %s complete\n\n", urlToSearch+*path)
 			}
 			wg.Done()
 		}()
